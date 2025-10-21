@@ -157,8 +157,19 @@ private:
 		capture->setState(Capture::Capture::State::AllowAll);
 		std::this_thread::sleep_for(std::chrono::microseconds(200));
 		capture->clear();
-		capture->add(Capture::RedirectInfo{ "66.66.66.66",80,server_ip->text().toStdString(), server_p_80->text().toUShort() });
-		capture->add(Capture::RedirectInfo{ "66.66.66.66",443,server_ip->text().toStdString(),server_p_80->text().toUShort() });
+
+		/*capture->add(Capture::RedirectInfo{ "66.66.66.66",80,server_ip->text().toStdString(), server_p_80->text().toUShort() });
+		capture->add(Capture::RedirectInfo{ "66.66.66.66",443,server_ip->text().toStdString(),server_p_443->text().toUShort() });*/
+		capture->add(
+			Capture::RedirectInfo{
+				"66.66.66.66",
+				server_ip->text().toStdString(),
+				{
+				{80,{server_p_80->text().toUShort()}},
+				{443,{server_p_443->text().toUShort()}}
+				}
+			}
+		);
 		capture->setState(state);
 	}
 

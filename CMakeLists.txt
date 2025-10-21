@@ -29,8 +29,6 @@ file(GLOB_RECURSE SOURCES_FILES
     "${CMAKE_SOURCE_DIR}/sources/*.cpp"
     "${CMAKE_SOURCE_DIR}/sources/*.h")
     
-message(STATUS "Source files: ${SOURCES_FILES}")
-
 add_executable(NetRedirector
     ${SOURCES_FILES}
 )
