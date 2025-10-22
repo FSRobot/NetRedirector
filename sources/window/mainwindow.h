@@ -17,7 +17,6 @@
 class MainWindow : public QWidget
 {
 	Q_OBJECT
-		Q_PROPERTY_CREATE_Q_H(bool, StartState)
 public:
 	MainWindow()
 	{
@@ -26,7 +25,7 @@ public:
 
 		init_window();
 		capture = new Capture::Capture();
-		capture->setState(Capture::Capture::State::AllowAll);
+		capture->setState(Capture::Capture::State::Redirector);
 		setWindowTitle("NetRedirector");
 		setWindowIcon(QIcon::fromTheme(QIcon::ThemeIcon::NetworkWired));
 	}
@@ -112,20 +111,6 @@ private:
 		author_label->setAlignment(Qt::AlignHCenter);
 		layout->addWidget(author_label, 4, 0, 1, 2);
 
-		connect(this, &MainWindow::StartStateChanged, this, &MainWindow::start_state_change);
-	}
-	void start_state_change() const
-	{
-		if (getStartState())
-		{
-			start_btn->setText(QStringLiteral("关闭"));
-			capture->setState(Capture::Capture::State::Redirector);
-		}
-		else
-		{
-			start_btn->setText(QStringLiteral("启动"));
-			capture->setState(Capture::Capture::State::AllowAll);
-		}
 	}
 
 	void apply_btn_click()
@@ -152,10 +137,8 @@ private:
 			msg.exec();
 			return;
 		}
-
-		auto state = capture->state();
-		capture->setState(Capture::Capture::State::AllowAll);
-		std::this_thread::sleep_for(std::chrono::microseconds(200));
+		auto isAutoStart = static_cast<bool>(capture->isRunning());
+		capture->stop();
 		capture->clear();
 
 		/*capture->add(Capture::RedirectInfo{ "66.66.66.66",80,server_ip->text().toStdString(), server_p_80->text().toUShort() });
@@ -170,12 +153,22 @@ private:
 				}
 			}
 		);
-		capture->setState(state);
+		if (isAutoStart) capture->start();
+		SPDLOG_INFO(capture->filter());
 	}
 
-	void start_btn_click()
+	void start_btn_click() const
 	{
-		setStartState(!getStartState());
+		auto& isRunning = capture->isRunning();
+		isRunning ? capture->stop() : capture->start();
+		if (isRunning)
+		{
+			start_btn->setText(QStringLiteral("关闭"));
+		}
+		else
+		{
+			start_btn->setText(QStringLiteral("启动"));
+		}
 	}
 private:
 	static bool isValidAddress(const QString& ip)

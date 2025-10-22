@@ -11,10 +11,11 @@
 #include <algorithm>
 #include <ranges>
 #include <set>
+#include <atomic>
 
-#define NTOHS(x) WinDivertHelperNtohs(x) // 端口
-#define NTOHL(x) WinDivertHelperNtohl(x) // ip address
-#define HTONS(x) WinDivertHelperHtons(x) // 端口
+#define NTOHS(x) WinDivertHelperNtohs(x) 
+#define NTOHL(x) WinDivertHelperNtohl(x) 
+#define HTONS(x) WinDivertHelperHtons(x) 
 #define HTONL(x) WinDivertHelperHtonl(x)
 #define MAXBUFF  WINDIVERT_MTU_MAX
 #define IPV6_LEN 45
@@ -84,8 +85,8 @@ namespace Capture
 			toAddr(to_address, this->m_to_address.data(), m_isIpv6);
 			for (auto& pair : map)
 			{
-				auto& from_port = pair.first;
-				for (auto& to_port : pair.second)
+				auto from_port = pair.first;
+				for (auto to_port : pair.second)
 				{
 					m_send_port_map[HTONS(from_port)].push_back(HTONS(to_port));
 				}
@@ -99,16 +100,16 @@ namespace Capture
 		{
 			m_from_address = std::vector(info.m_from_address);
 			m_to_address = std::vector(info.m_to_address);
-			m_send_port_map = std::map(m_send_port_map);
-			m_recv_port_map = std::map(m_recv_port_map);
+			m_send_port_map = std::map(info.m_send_port_map);
+			m_recv_port_map = std::map(info.m_recv_port_map);
 			m_isIpv6 = info.m_isIpv6;
 		}
 		RedirectInfo& operator = (const RedirectInfo& info)
 		{
 			m_from_address = std::vector<UINT32>(info.m_from_address);
 			m_to_address = std::vector<UINT32>(info.m_to_address);
-			m_send_port_map = std::map(m_send_port_map);
-			m_recv_port_map = std::map(m_recv_port_map);
+			m_send_port_map = std::map(info.m_send_port_map);
+			m_recv_port_map = std::map(info.m_recv_port_map);
 			m_isIpv6 = info.m_isIpv6;
 			return *this;
 		}
@@ -116,16 +117,16 @@ namespace Capture
 		{
 			m_from_address = info.from_address();
 			m_to_address = info.to_address();
-			m_send_port_map = std::map(m_send_port_map);
-			m_recv_port_map = std::map(m_recv_port_map);
+			m_send_port_map = std::map(info.m_send_port_map);
+			m_recv_port_map = std::map(info.m_recv_port_map);
 			m_isIpv6 = info.isIpv6();
 		}
 		RedirectInfo& operator = (RedirectInfo&& info) noexcept
 		{
 			m_from_address = info.from_address();
 			m_to_address = info.to_address();
-			m_send_port_map = std::map(m_send_port_map);
-			m_recv_port_map = std::map(m_recv_port_map);
+			m_send_port_map = std::map(info.m_send_port_map);
+			m_recv_port_map = std::map(info.m_recv_port_map);
 			m_isIpv6 = info.isIpv6();
 			return *this;
 		}
@@ -136,6 +137,15 @@ namespace Capture
 				m_isIpv6 == info.m_isIpv6;
 		}
 
+		std::vector<UINT16> all_from_port() const
+		{
+			std::vector<UINT16> list;
+			for (const auto& key : m_send_port_map | std::views::keys)
+			{
+				list.push_back(key);
+			}
+			return list;
+		}
 		std::optional<std::vector<UINT16>> from_port_list(UINT16 port) const
 		{
 			if (m_send_port_map.contains(port))
@@ -151,6 +161,15 @@ namespace Capture
 			return toStr(this->m_from_address.data(), m_isIpv6);
 		}
 
+		std::vector<UINT16> all_to_port() const
+		{
+			std::vector<UINT16> list;
+			for (const auto& key : m_recv_port_map | std::views::keys)
+			{
+				list.push_back(key);
+			}
+			return list;
+		}
 		std::optional<std::vector<UINT16>> to_port_list(UINT16 port) const
 		{
 			if (m_recv_port_map.contains(port))
@@ -182,8 +201,8 @@ namespace Capture
 			std::set<UINT16> key_port;
 			for (auto& pair : m_send_port_map)
 			{
-				auto& from_port = pair.first;
-				for (auto& to_port : pair.second)
+				auto from_port = pair.first;
+				for (auto to_port : pair.second)
 				{
 					m_recv_port_map[to_port].push_back(from_port);
 				}
@@ -206,29 +225,15 @@ namespace Capture
 			AllowAll,
 			Redirector
 		};
-		Capture()
-		{
-			std::lock_guard lock(mtx);
-			handle = WinDivertOpen("true", WINDIVERT_LAYER_NETWORK, 0, 0);
-			if (handle == INVALID_HANDLE_VALUE)
-			{
-				if (GetLastError() == ERROR_INVALID_PARAMETER && !WinDivertHelperCompileFilter("true", WINDIVERT_LAYER_NETWORK, nullptr, 0, &err_str, nullptr))
-				{
-					SPDLOG_ERROR("error: invalid filter \"{}\"", err_str);
-				}
-				SPDLOG_ERROR("error: failed to open the WinDivert device ({})", GetLastError());
-				std::this_thread::sleep_for(std::chrono::milliseconds(50));
-				exit(-1);
-			}
-			m_thread = std::thread(&Capture::run, this);
-			SPDLOG_INFO("start running...");
-		}
+		Capture() = default;
 		~Capture()
 		{
 			if (m_thread.joinable())
 				m_thread.join();
-			if (handle != INVALID_HANDLE_VALUE)
+			if (handle != INVALID_HANDLE_VALUE) {
+				WinDivertShutdown(handle, WINDIVERT_SHUTDOWN_BOTH);
 				WinDivertClose(handle);
+			}
 		}
 
 		State state() const
@@ -247,7 +252,8 @@ namespace Capture
 			std::lock_guard lock(mtx);
 			bool flag = std::ranges::any_of(list, [&](auto const& info)
 				{
-					if (info.from_address_str() != addr) return false;
+					if (is_from_port && info.from_address_str() != addr) return false;
+					if (!is_from_port && info.to_address_str() != addr) return false;
 					if (is_from_port && info.from_port_list(port) != std::nullopt) return true;
 					if (!is_from_port && info.to_port_list(port) != std::nullopt) return true;
 				});
@@ -258,7 +264,8 @@ namespace Capture
 		{
 			for (auto& info : list)
 			{
-				if (info.from_address_str() != addr) continue;
+				if (is_from_port && info.from_address_str() != addr) continue;
+				if (!is_from_port && info.to_address_str() != addr) continue;
 				if (is_from_port && info.from_port_list(port) != std::nullopt) return info;
 				if (!is_from_port && info.to_port_list(port) != std::nullopt) return info;
 			}
@@ -282,11 +289,80 @@ namespace Capture
 						return info == item;
 					});*/
 		}
-	private:
-		void run()
+		std::string filter() const
 		{
-			SPDLOG_INFO("listening...");
-			while (true)
+			std::string str = "tcp and (";
+			bool f0 = false;
+			for (const auto& info : list)
+			{
+				if (f0)
+					str += " or ";
+				str += std::format("(remoteAddr = {} and (", info.from_address_str());
+				bool f1 = false;
+				for (auto port : info.all_from_port())
+				{
+					if (f1)
+						str += " or ";
+					str += std::format("tcp.DstPort == {}", HTONS(port));
+					f1 = true;
+				}
+				str += std::format(")) or (remoteAddr = {} and (", info.to_address_str());
+				f1 = false;
+				for (auto port : info.all_to_port())
+				{
+					if (f1)
+						str += " or ";
+					str += std::format("tcp.SrcPort == {}", HTONS(port));
+					f1 = true;
+				}
+				str += "))";
+				f0 = true;
+			}
+			str += ")";
+			return str;
+		}
+
+		void start()
+		{
+			if (run_flag || list.empty()) return;
+			run_flag = true;
+			handle = WinDivertOpen(filter().c_str(), WINDIVERT_LAYER_NETWORK, 0, 0);
+			if (handle == INVALID_HANDLE_VALUE)
+			{
+				if (GetLastError() == ERROR_INVALID_PARAMETER && !WinDivertHelperCompileFilter("true", WINDIVERT_LAYER_NETWORK, nullptr, 0, &err_str, nullptr))
+				{
+					SPDLOG_ERROR("error: invalid filter \"{}\"", err_str);
+				}
+				SPDLOG_ERROR("error: failed to open the WinDivert device ({})", GetLastError());
+				std::this_thread::sleep_for(std::chrono::milliseconds(50));
+				exit(-1);
+			}
+			m_thread = std::thread(&Capture::loop, this);
+			SPDLOG_INFO("start redirector");
+		}
+		void stop()
+		{
+			if (!run_flag) return;
+			run_flag = false;
+			if (handle != INVALID_HANDLE_VALUE)
+			{
+				WinDivertShutdown(handle, WINDIVERT_SHUTDOWN_BOTH);
+				WinDivertClose(handle);
+			}
+			if (m_thread.joinable())
+			{
+				m_thread.join();
+			}
+			SPDLOG_INFO("stop redirector");
+		}
+		std::atomic<bool>& isRunning()
+		{
+			return run_flag;
+		}
+	private:
+		void loop()
+		{
+			while (run_flag)
 			{
 				if (!WinDivertRecv(handle, packet, sizeof(packet), &packet_len,
 					&recv_addr))
@@ -345,7 +421,7 @@ namespace Capture
 						sizeof(dst_str));
 				}
 
-				// 如果不是目标地址或重定向地址，原样转发
+
 				bool is_dst = in(dst_str, tcp_header->DstPort, true);
 				bool is_src = in(src_str, tcp_header->SrcPort, false);
 				if (!is_dst && !is_src)
@@ -356,27 +432,26 @@ namespace Capture
 
 				if (ip_header != nullptr)
 				{
-					// 如果是发往目标地址的请求，修改为重定向地址
 					if (is_dst)
 					{
 						auto item = find(dst_str, tcp_header->DstPort, true);
 						ip_header->DstAddr = HTONL(item->get().to_address()[0]);
-						for (auto& port : *item->get().from_port_list(tcp_header->DstPort))
+						auto ports = *item->get().from_port_list(tcp_header->DstPort);
+						for (auto& port : ports)
 						{
-							if (item->get().isValid()) {
-								//SPDLOG_INFO("@ dst>{}->{}", item->get().get_from_str(), item->get().get_to_str());
-								tcp_header->DstPort = port;
-								WinDivertHelperCalcChecksums(packet, packet_len, &recv_addr, 0);
-								WinDivertSend(handle, packet, packet_len, nullptr, &recv_addr);
-							}
+							//SPDLOG_INFO("@ dst>{}->{}", item->get().get_from_str(), item->get().get_to_str());
+							tcp_header->DstPort = port;
+							WinDivertHelperCalcChecksums(packet, packet_len, &recv_addr, 0);
+							WinDivertSend(handle, packet, packet_len, nullptr, &recv_addr);
 						}
 						continue;
 					}
 					if (is_src)
 					{
-						auto item = find(src_str, tcp_header->SrcPort, false);
-						ip_header->SrcAddr = HTONL(item->get().from_address()[0]);
-						for (auto& port : *item->get().to_port_list(tcp_header->DstPort))
+						auto item = find(src_str, tcp_header->SrcPort, false)->get();
+						ip_header->SrcAddr = HTONL(item.from_address()[0]);
+						auto ports = *item.to_port_list(tcp_header->SrcPort);
+						for (auto& port : ports)
 						{
 							//SPDLOG_INFO("@ src>{}->{}", item->get().get_to_str(), item->get().get_from_str());
 							tcp_header->SrcPort = port;
@@ -389,14 +464,13 @@ namespace Capture
 				if (ipv6_header != nullptr)
 				{
 					UINT32 new_addr[4];
-
-					// 如果是发往目标地址的请求，修改为重定向地址
 					if (is_dst)
 					{
-						auto item = find(dst_str, tcp_header->DstPort, true);
-						WinDivertHelperHtonIPv6Address(item->get().to_address().data(), new_addr);
+						auto item = find(dst_str, tcp_header->DstPort, true)->get();
+						WinDivertHelperHtonIPv6Address(item.to_address().data(), new_addr);
 						memcpy(ipv6_header->DstAddr, new_addr, sizeof(new_addr));
-						for (auto& port : *item->get().from_port_list(tcp_header->DstPort)) {
+						auto ports = *item.from_port_list(tcp_header->DstPort);
+						for (auto& port : ports) {
 							//SPDLOG_INFO("@ dst>{}->{}", item->get().get_from_str(), item->get().get_to_str());
 							tcp_header->DstPort = port;
 							WinDivertHelperCalcChecksums(packet, packet_len, &recv_addr, 0);
@@ -406,11 +480,12 @@ namespace Capture
 					}
 					if (is_src)
 					{
-						auto item = find(src_str, tcp_header->SrcPort, false);
+						auto item = find(src_str, tcp_header->SrcPort, false)->get();
 						//SPDLOG_INFO("@ src>{}->{}", item->get().get_to_str(), item->get().get_from_str());
-						WinDivertHelperHtonIPv6Address(item->get().from_address().data(), new_addr);
+						WinDivertHelperHtonIPv6Address(item.from_address().data(), new_addr);
 						memcpy(ipv6_header->SrcAddr, new_addr, sizeof(new_addr));
-						for (auto& port : *item->get().to_port_list(tcp_header->DstPort)) {
+						auto ports = *item.to_port_list(tcp_header->SrcPort);
+						for (auto& port : ports) {
 							tcp_header->SrcPort = port;
 							WinDivertHelperCalcChecksums(packet, packet_len, &recv_addr, 0);
 							WinDivertSend(handle, packet, packet_len, nullptr, &recv_addr);
@@ -423,6 +498,7 @@ namespace Capture
 			}
 		}
 
+		std::atomic<bool> run_flag{ false };
 		const char* err_str;
 		HANDLE handle = INVALID_HANDLE_VALUE;
 		unsigned char packet[MAXBUFF];
