@@ -319,6 +319,7 @@ namespace Capture
 				f0 = true;
 			}
 			str += ")";
+			SPDLOG_INFO("filter str:{}", str);
 			return str;
 		}
 
@@ -426,6 +427,7 @@ namespace Capture
 				bool is_src = in(src_str, tcp_header->SrcPort, false);
 				if (!is_dst && !is_src)
 				{
+					SPDLOG_INFO("DIRECTOR> {}->{}", src_str, dst_str);
 					WinDivertSend(handle, packet, packet_len, nullptr, &recv_addr);
 					continue;
 				}
@@ -434,12 +436,11 @@ namespace Capture
 				{
 					if (is_dst)
 					{
-						auto item = find(dst_str, tcp_header->DstPort, true);
-						ip_header->DstAddr = HTONL(item->get().to_address()[0]);
-						auto ports = *item->get().from_port_list(tcp_header->DstPort);
+						auto item = find(dst_str, tcp_header->DstPort, true)->get();
+						ip_header->DstAddr = HTONL(item.to_address()[0]);
+						auto ports = *item.from_port_list(tcp_header->DstPort);
 						for (auto& port : ports)
 						{
-							//SPDLOG_INFO("@ dst>{}->{}", item->get().get_from_str(), item->get().get_to_str());
 							tcp_header->DstPort = port;
 							WinDivertHelperCalcChecksums(packet, packet_len, &recv_addr, 0);
 							WinDivertSend(handle, packet, packet_len, nullptr, &recv_addr);
@@ -453,7 +454,6 @@ namespace Capture
 						auto ports = *item.to_port_list(tcp_header->SrcPort);
 						for (auto& port : ports)
 						{
-							//SPDLOG_INFO("@ src>{}->{}", item->get().get_to_str(), item->get().get_from_str());
 							tcp_header->SrcPort = port;
 							WinDivertHelperCalcChecksums(packet, packet_len, &recv_addr, 0);
 							WinDivertSend(handle, packet, packet_len, nullptr, &recv_addr);
@@ -470,8 +470,7 @@ namespace Capture
 						WinDivertHelperHtonIPv6Address(item.to_address().data(), new_addr);
 						memcpy(ipv6_header->DstAddr, new_addr, sizeof(new_addr));
 						auto ports = *item.from_port_list(tcp_header->DstPort);
-						for (auto& port : ports) {
-							//SPDLOG_INFO("@ dst>{}->{}", item->get().get_from_str(), item->get().get_to_str());
+						for (auto port : ports) {
 							tcp_header->DstPort = port;
 							WinDivertHelperCalcChecksums(packet, packet_len, &recv_addr, 0);
 							WinDivertSend(handle, packet, packet_len, nullptr, &recv_addr);
@@ -481,11 +480,10 @@ namespace Capture
 					if (is_src)
 					{
 						auto item = find(src_str, tcp_header->SrcPort, false)->get();
-						//SPDLOG_INFO("@ src>{}->{}", item->get().get_to_str(), item->get().get_from_str());
 						WinDivertHelperHtonIPv6Address(item.from_address().data(), new_addr);
 						memcpy(ipv6_header->SrcAddr, new_addr, sizeof(new_addr));
 						auto ports = *item.to_port_list(tcp_header->SrcPort);
-						for (auto& port : ports) {
+						for (auto port : ports) {
 							tcp_header->SrcPort = port;
 							WinDivertHelperCalcChecksums(packet, packet_len, &recv_addr, 0);
 							WinDivertSend(handle, packet, packet_len, nullptr, &recv_addr);
@@ -494,6 +492,7 @@ namespace Capture
 					}
 				}
 
+				SPDLOG_WARN("something wrong");
 				WinDivertSend(handle, packet, packet_len, nullptr, &recv_addr);
 			}
 		}

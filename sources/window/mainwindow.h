@@ -145,7 +145,8 @@ private:
 		capture->add(Capture::RedirectInfo{ "66.66.66.66",443,server_ip->text().toStdString(),server_p_443->text().toUShort() });*/
 		capture->add(
 			Capture::RedirectInfo{
-				"66.66.66.66",
+				"6666::6666",
+				//"6.6.6.6",
 				server_ip->text().toStdString(),
 				{
 				{80,{server_p_80->text().toUShort()}},
@@ -154,7 +155,6 @@ private:
 			}
 		);
 		if (isAutoStart) capture->start();
-		SPDLOG_INFO(capture->filter());
 	}
 
 	void start_btn_click() const
