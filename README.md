@@ -16,9 +16,22 @@
 * 如果本机为``zoffline server``那请将``server``地址填写本地的局域网IPv6地址
 * 该工具与反作弊相关软件同时运行可能会导致封禁,谨慎使用!
 
-
 ### 关于驱动卸载
 ```
     sc stop WinDivert
     sc delete WinDivert
 ```
+
+### 关于开发配置
+* 配置vcpkg
+```
+vcpkg install spdlog fmt
+```
+* 修改CMakePresets.json
+```
+    QTDIR指向你的qt目录
+    CMAKE_TOOLCHAIN_FILE指向你的vcpkg目录
+```
+
+* 配置qt 6.8.3
+* 使用msvc发布
