@@ -13,7 +13,7 @@
 6666::6666 us-or-rly101.zwift.com secure.zwift.com cdn.zwift.com launcher.zwift.com
 ```
 * __注意:__ 如果本机有类似``v2rayN,clash``等相关代理软件记得配置路由规则避免无法重注入
-* 如果本机为``zoffline server``那请将``server``地址填写通过``https://6.ipw.cn``网站获取到的IPv6地址
+* 如果本机为``zoffline server``请勿使用此软件!
 * 该工具与反作弊相关软件同时运行可能会导致封禁,谨慎使用!
 
 ### 关于驱动卸载
