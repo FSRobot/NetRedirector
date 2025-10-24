@@ -44,8 +44,10 @@ private:
 		exitAction = new QAction(QStringLiteral("退出"));
 		connect(exitAction, &QAction::triggered, this, [&]()
 			{
-				SPDLOG_INFO("退出进程...");
-				exit(0);
+				capture->stop();
+				std::this_thread::sleep_for(std::chrono::microseconds(100));
+				uninstall();
+				exit(EXIT_SUCCESS);
 			});
 
 		tray_menu = new QMenu(this);
@@ -62,6 +64,8 @@ private:
 				}
 			});
 	}
+
+
 	void init_window()
 	{
 		resize(250, 200);
@@ -171,6 +175,39 @@ private:
 		}
 	}
 private:
+	static int uninstall()
+	{
+		SC_HANDLE manager = NULL, service = NULL;
+		SERVICE_STATUS status;
+		manager = OpenSCManager(NULL, NULL, SC_MANAGER_ALL_ACCESS);
+		if (manager == NULL)
+		{
+			SPDLOG_ERROR("error: failed to open service manager (%d)", GetLastError());
+			return EXIT_FAILURE;
+		}
+		service = OpenService(manager, L"WinDivert", SERVICE_ALL_ACCESS);
+		if (service == NULL)
+		{
+			SPDLOG_ERROR("error: failed to open WinDivert service (%d)", GetLastError());
+			return EXIT_FAILURE;
+		}
+		if (!ControlService(service, SERVICE_CONTROL_STOP, &status))
+		{
+			SPDLOG_ERROR("error: failed to stop WinDivert service (%d)", GetLastError());
+			return EXIT_FAILURE;
+		}
+		if (status.dwCurrentState != SERVICE_STOPPED)
+		{
+			SPDLOG_ERROR("error: failed to stop WinDivert service");
+			return EXIT_FAILURE;
+		}
+		CloseServiceHandle(service);
+		CloseServiceHandle(manager);
+
+		SPDLOG_INFO("uninstall success");
+		return EXIT_SUCCESS;
+	}
+
 	static bool isValidAddress(const QString& ip)
 	{
 		QHostAddress addr;
